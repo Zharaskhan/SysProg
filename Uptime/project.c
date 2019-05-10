@@ -1,3 +1,4 @@
+#include <linux/ktime.h> //uptime
 #include <linux/module.h>       
 #include <linux/kernel.h>
 #include <linux/cpumask.h>
@@ -26,33 +27,30 @@
 
 #define PROCFS_MAX_SIZE	100
 #define PROCFS_NAME "helper"
+MODULE_LICENSE("GPL");
 
 struct proc_dir_entry *Our_Proc_File;
 char proc_buf[PROCFS_MAX_SIZE];
 
 
-unsigned long get_uptime() {
-	struct timespec64 uptime;
-	u64 nsec;
-	int i;
+char* get_uptime(char *buf) {
+	struct timespec  uptime;
+	get_monotonic_boottime(&uptime);
+	unsigned long uptime_in_seconds = uptime.tv_sec;
 
-	nsec = 0;
-	for_each_possible_cpu(i)
-		nsec += (__force u64) kcpustat_cpu(i).cpustat[CPUTIME_IDLE];
+	int seconds = uptime_in_seconds % 60;
+	int minutes = uptime_in_seconds / 60 % 60;
+	int hours   = uptime_in_seconds / 3600 % 24;
+	int days    = uptime_in_seconds / 86400;
 
-	ktime_get_boottime_ts64(&uptime);
+	char daystring[32] = "";
+   	if (days > 1) {
+      sprintf(daystring, "%d days, ", days);
+   	} else if (days == 1) {
+      sprintf(daystring, "%d days, ", days);
+   	}
 
-	return (unsigned long) uptime.tv_sec
-}
-
-int calc_uptime(void){
-	printk(KERN_INFO "BEGIN");
-	
-	printk(KERN_INFO get_uptime());
-
-
-	printk(KERN_INFO "END");
-	return 0;
+ 	sprintf(buf, "%s%02d:%02d:%02d", daystring, hours, minutes, seconds);
 }
 
 static ssize_t procfile_read(struct file *fp, char *buf, size_t len, loff_t *off){
@@ -62,8 +60,10 @@ static ssize_t procfile_read(struct file *fp, char *buf, size_t len, loff_t *off
 		return 0;
 	}
 	finished = 1;
-	calc_uptime();
-	//sprintf(buf, "MemTotal: %lld\n", memTotal);
+	char uptime[30] = "";
+	get_uptime(uptime);
+	
+	sprintf(buf, "Uptime: %s\n", uptime);
 	//sprintf(buf, "MemTotal: %lld\nMemFree: %lld\nBuffers: %lld\n", memTotal, memFree, buffers);
 	return strlen(buf);
 }
@@ -83,4 +83,3 @@ static void finish_module(void){
 
 module_init(start_module);
 module_exit(finish_module);
-
